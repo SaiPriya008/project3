@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Visualization System</title>
+    <!-- Include D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Define CSS styles */
+        .dot {
+            fill: steelblue;
+        }
+        .brush .extent {
+            fill-opacity: 0.3;
+            stroke: #000;
+            shape-rendering: crispEdges;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Create SVG container for the scatter plot -->
+    <svg id="scatterPlot" width="500" height="300"></svg>
+
+    <!-- Create SVG container for the linked histogram -->
+    <svg id="histogram" width="200" height="300"></svg>
+
+    <!-- Tooltip element -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // Sample data
+        const data = [
+            { x: 10, y: 20 },
+            { x: 40, y: 90 },
+            { x: 70, y: 30 },
+            { x: 110, y: 70 },
+            { x: 150, y: 50 },
+            { x: 180, y: 100 }
+        ];
+
+        // Set up SVG container and scales for scatter plot
+        const scatterSvg = d3.select("#scatterPlot"),
+            scatterWidth = +scatterSvg.attr("width"),
+            scatterHeight = +scatterSvg.attr("height"),
+            scatterMargin = { top: 20, right: 20, bottom: 30, left: 40 },
+            scatterPlotWidth = scatterWidth - scatterMargin.left - scatterMargin.right,
+            scatterPlotHeight = scatterHeight - scatterMargin.top - scatterMargin.bottom;
+
+        // Create scales for scatter plot
+        const xScale = d3.scaleLinear()
+            .domain([0, d3.max(data, d => d.x)])
+            .range([0, scatterPlotWidth]);
+
+        const yScale = d3.scaleLinear()
+            .domain([0, d3.max(data, d => d.y)])
+            .range([scatterPlotHeight, 0]);
+
+        // Create scatter plot
+        const dots = scatterSvg.append("g")
+            .attr("transform", "translate(" + scatterMargin.left + "," + scatterMargin.top + ")")
+            .selectAll(".dot")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "dot")
+            .attr("cx", d => xScale(d.x))
+            .attr("cy", d => yScale(d.y))
+            .attr("r", 5)
+            .on("mouseover", handleMouseOver)
+            .on("mouseout", handleMouseOut);
+
+        // Create axis labels for scatter plot
+        scatterSvg.append("g")
+            .attr("transform", "translate(" + scatterMargin.left + "," + (scatterHeight - scatterMargin.bottom) + ")")
+            .call(d3.axisBottom(xScale));
+
+        scatterSvg.append("g")
+            .attr("transform", "translate(" + scatterMargin.left + "," + scatterMargin.top + ")")
+            .call(d3.axisLeft(yScale));
+
+        // Set up SVG container and scales for histogram
+        const histogramSvg = d3.select("#histogram"),
+            histogramWidth = +histogramSvg.attr("width"),
+            histogramHeight = +histogramSvg.attr("height"),
+            histogramMargin = { top: 20, right: 20, bottom: 30, left: 40 },
+            histogramPlotWidth = histogramWidth - histogramMargin.left - histogramMargin.right,
+            histogramPlotHeight = histogramHeight - histogramMargin.top - histogramMargin.bottom;
+
+        // Create scales for histogram
+        const histogramXScale = d3.scaleLinear()
+            .domain(xScale.domain())
+            .range([0, histogramPlotWidth]);
+
+        const histogramYScale = d3.scaleLinear()
+            .domain([0, data.length])
+            .range([histogramPlotHeight, 0]);
+
+        // Create histogram
+        const histogram = d3.histogram()
+            .value(d => d.x)
+            .domain(xScale.domain())
+            .thresholds(xScale.ticks(10));
+
+        const bins = histogram(data);
+
+        histogramSvg.selectAll("rect")
+            .data(bins)
+            .enter().append("rect")
+            .attr("x", d => histogramXScale(d.x0) + histogramMargin.left)
+            .attr("y", d => histogramYScale(d.length) + histogramMargin.top)
+            .attr("width", d => histogramXScale(d.x1) - histogramXScale(d.x0) - 1)
+            .attr("height", d => histogramPlotHeight - histogramYScale(d.length))
+            .attr("fill", "steelblue");
+
+        // Tooltip functions
+        function handleMouseOver(event, d) {
+            d3.select(this).attr("r", 8);
+            d3.select("#tooltip")
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px")
+                .html(`X: ${d.x}, Y: ${d.y}`)
+                .style("opacity", 1);
+        }
+
+        function handleMouseOut(event, d) {
+            d3.select(this).attr("r", 5);
+            d3.select("#tooltip").style("opacity", 0);
+        }
+    </script>
+</body>
+</html>

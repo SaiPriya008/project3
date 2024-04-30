@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Visualization System</title>
+    <!-- Include D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Define CSS styles */
+        .box {
+            fill: steelblue;
+        }
+        .line {
+            stroke: black;
+            stroke-width: 2;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Create SVG container for the box plot -->
+    <svg id="boxPlot" width="500" height="300"></svg>
+
+    <!-- Create SVG container for the linked histogram -->
+    <svg id="histogram" width="200" height="300"></svg>
+
+    <!-- Tooltip element -->
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // Sample data
+        const data = [
+            { mpg: 18, origin: "American" },
+            { mpg: 15, origin: "European" },
+            { mpg: 18, origin: "Japanese" },
+            { mpg: 16, origin: "American" },
+            { mpg: 17, origin: "European" },
+            { mpg: 15, origin: "Japanese" },
+            { mpg: 14, origin: "American" },
+            // Add more data points as needed
+        ];
+
+        // Set up SVG container and scales for the box plot
+        const boxSvg = d3.select("#boxPlot"),
+            boxWidth = +boxSvg.attr("width"),
+            boxHeight = +boxSvg.attr("height"),
+            boxMargin = { top: 20, right: 20, bottom: 30, left: 40 },
+            boxPlotWidth = boxWidth - boxMargin.left - boxMargin.right,
+            boxPlotHeight = boxHeight - boxMargin.top - boxMargin.bottom;
+
+        // Create scales for the box plot
+        const yScale = d3.scaleLinear()
+            .domain([0, d3.max(data, d => d.mpg)])
+            .range([boxPlotHeight, 0]);
+
+        // Group data by origin
+        const groupedData = d3.groups(data, d => d.origin);
+
+        // Compute quartiles, median, and IQR for each group
+        const boxData = groupedData.map(group => {
+            const mpgValues = group[1].map(d => d.mpg).sort(d3.ascending);
+            const q1 = d3.quantile(mpgValues, 0.25);
+            const q2 = d3.quantile(mpgValues, 0.5);
+            const q3 = d3.quantile(mpgValues, 0.75);
+            const iqr = q3 - q1;
+            const min = mpgValues[0];
+            const max = mpgValues[mpgValues.length - 1];
+            return { origin: group[0], q1, q2, q3, iqr, min, max };
+        });
+
+        // Create box plots
+        const boxPlots = boxSvg.selectAll(".box")
+            .data(boxData)
+            .enter().append("g")
+            .attr("transform", (d, i) => "translate(" + (boxMargin.left + i * 100) + "," + boxMargin.top + ")")
+            .on("mouseover", handleMouseOver)
+            .on("mouseout", handleMouseOut);
+
+        boxPlots.append("rect")
+            .attr("class", "box")
+            .attr("x", -20)
+            .attr("y", d => yScale(d.q3))
+            .attr("width", 40)
+            .attr("height", d => yScale(d.q1) - yScale(d.q3));
+
+        boxPlots.append("line")
+            .attr("class", "line")
+            .attr("x1", -20)
+            .attr("y1", d => yScale(d.q2))
+            .attr("x2", 20)
+            .attr("y2", d => yScale(d.q2));
+
+        boxPlots.append("line")
+            .attr("class", "line")
+            .attr("x1", 0)
+            .attr("y1", d => yScale(d.min))
+            .attr("x2", 0)
+            .attr("y2", d => yScale(d.q1));
+
+        boxPlots.append("line")
+            .attr("class", "line")
+            .attr("x1", 0)
+            .attr("y1", d => yScale(d.max))
+            .attr("x2", 0)
+            .attr("y2", d => yScale(d.q3));
+
+        // Create axis label for box plot
+        boxSvg.append("g")
+            .attr("transform", "translate(" + boxMargin.left + "," + boxMargin.top + ")")
+            .call(d3.axisLeft(yScale).tickSizeOuter(0))
+            .append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", -35)
+            .attr("x", -boxPlotHeight / 2)
+            .attr("dy", "1em")
+            .attr("text-anchor", "middle")
+            .text("MPG");
+
+        // Set up SVG container and scales for histogram
+        const histogramSvg = d3.select("#histogram"),
+            histogramWidth = +histogramSvg.attr("width"),
+            histogramHeight = +histogramSvg.attr("height"),
+            histogramMargin = { top: 20, right: 20, bottom: 30, left: 40 },
+            histogramPlotWidth = histogramWidth - histogramMargin.left - histogramMargin.right,
+            histogramPlotHeight = histogramHeight - histogramMargin.top - histogramMargin.bottom;
+
+        // Create scales for histogram
+        const histogramXScale = d3.scaleBand()
+            .domain(groupedData.map(d => d[0]))
+            .range([0, histogramPlotWidth])
+            .padding(0.1);
+
+        const histogramYScale = d3.scaleLinear()
+            .domain([0, d3.max(boxData, d => d.max)])
+            .nice()
+            .range([histogramPlotHeight, 0]);
+
+        // Create histogram bars
+        histogramSvg.selectAll(".bar")
+            .data(boxData)
+            .enter().append("rect")
+            .attr("class", "bar")
+            .attr("x", d => histogramXScale(d.origin) + histogramMargin.left)
+            .attr("y", d => histogramYScale(d.max) + histogramMargin.top)
+            .attr("width", histogramXScale.bandwidth())
+            .attr("height", d => histogramPlotHeight - histogramYScale(d.max))
+            .on("mouseover", handleMouseOver)
+            .on("mouseout", handleMouseOut);
+
+        // Create axis labels for histogram
+        histogramSvg.append("g")
+            .attr("transform", "translate(" + histogramMargin.left + "," + (histogramHeight - histogramMargin.bottom) + ")")
+            .call(d3.axisBottom(histogramXScale).tickSizeOuter(0))
+            .selectAll("text")
+            .style("text-anchor", "end")
+            .attr("dx", "-.8em")
+            .attr("dy", "-.55em")
+            .attr("transform", "rotate(-90)");
+
+        histogramSvg.append("g")
+            .attr("transform", "translate(" + histogramMargin.left + "," + histogramMargin.top + ")")
+            .call(d3.axisLeft(histogramYScale).tickSizeOuter(0))
+            .append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", -35)
+            .attr("x", -histogramPlotHeight / 2)
+            .attr("dy", "1em")
+            .attr("text-anchor", "middle")
+            .text("MPG");
+
+        // Tooltip functions
+        function handleMouseOver(event, d) {
+            d3.select(this).attr("fill", "red");
+            d3.select("#tooltip")
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px")
+                .html(`<strong>Origin:</strong> ${d.origin}<br><strong>Min MPG:</strong> ${d.min}<br><strong>Q1:</strong> ${d.q1}<br><strong>Median:</strong> ${d.q2}<br><strong>Q3:</strong> ${d.q3}<br><strong>Max MPG:</strong> ${d.max}`)
+                .style("opacity", 1);
+        }
+
+        function handleMouseOut(event, d) {
+            d3.select(this).attr("fill", "steelblue");
+            d3.select("#tooltip").style("opacity", 0);
+        }
+    </script>
+</body>
+</html>
